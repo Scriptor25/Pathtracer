@@ -1,0 +1,6 @@
+id: main
+stages:
+  vertex:
+    - shaders/vertex
+  fragment:
+    - shaders/fragment
