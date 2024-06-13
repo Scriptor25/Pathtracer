@@ -13,5 +13,13 @@ bool Scene_Hit(in Scene self, in Ray ray, in Interval ray_t, inout Record rec) {
         }
     }
 
+    for (int i = 0; i < self.triangle_count; ++i) {
+        if (Triangle_Hit(self.triangles[i], ray, ray_t, tmp_rec)) {
+            hit = true;
+            ray_t.max = tmp_rec.t;
+            rec = tmp_rec;
+        }
+    }
+
     return hit;
 }

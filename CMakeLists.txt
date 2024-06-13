@@ -32,6 +32,11 @@ FetchContent_Declare(
         GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
         GIT_TAG 0.8.0
 )
+FetchContent_Declare(
+        imgui
+        GIT_REPOSITORY https://github.com/ocornut/imgui.git
+        GIT_TAG docking
+)
 
 set(glew-cmake_BUILD_SHARED OFF)
 set(glew-cmake_BUILD_STATIC ON)
@@ -46,12 +51,22 @@ set(BUILD_SHARED_LIBS OFF)
 set(ASSIMP_BUILD_TESTS OFF)
 set(ASSIMP_INSTALL OFF)
 
-FetchContent_MakeAvailable(glew glfw glm assimp yaml-cpp)
+FetchContent_MakeAvailable(glew glfw glm assimp yaml-cpp imgui)
+
+FetchContent_GetProperties(imgui)
+file(GLOB imgui_src
+        ${imgui_SOURCE_DIR}/*.cpp
+        ${imgui_SOURCE_DIR}/misc/cpp/imgui_stdlib.cpp
+        ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
+        ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp)
+add_library(imgui STATIC ${imgui_src})
+target_include_directories(imgui PUBLIC ${imgui_SOURCE_DIR})
+target_link_libraries(imgui PUBLIC glfw)
 
 file(GLOB_RECURSE src src/*.cpp include/*.hpp)
 add_executable(Pathtracer ${src})
 target_include_directories(Pathtracer PRIVATE include)
-target_link_libraries(Pathtracer PRIVATE libglew_static glfw glm::glm assimp yaml-cpp::yaml-cpp)
+target_link_libraries(Pathtracer PRIVATE libglew_static glfw glm::glm assimp yaml-cpp::yaml-cpp imgui)
 
 install(TARGETS Pathtracer)
 install(DIRECTORY assets DESTINATION bin)

@@ -2,8 +2,11 @@
 
 #include <filesystem>
 #include <fstream>
+#include <imgui.h>
 #include <iostream>
 #include <vector>
+#include <backends/imgui_impl_glfw.h>
+#include <backends/imgui_impl_opengl3.h>
 #include <gl/glew.h>
 #include <glfw/glfw3.h>
 #include <glm/glm.hpp>
@@ -16,10 +19,42 @@ void glfwErrorCallback(const int errorCode, const char* pDescription)
     std::cerr << "[GLFW 0x" << std::hex << errorCode << std::dec << "] " << pDescription << std::endl;
 }
 
+struct WindowState
+{
+    int xpos;
+    int ypos;
+    int width;
+    int height;
+};
+
+void glfwToggleFullscreen(GLFWwindow* pWindow)
+{
+    if (glfwGetWindowMonitor(pWindow))
+    {
+        const auto pState = static_cast<WindowState*>(glfwGetWindowUserPointer(pWindow));
+        glfwSetWindowMonitor(pWindow, nullptr, pState->xpos, pState->ypos, pState->width, pState->height, GLFW_DONT_CARE);
+        delete pState;
+    }
+    else
+    {
+        const auto pState = new WindowState();
+        glfwGetWindowPos(pWindow, &pState->xpos, &pState->ypos);
+        glfwGetWindowSize(pWindow, &pState->width, &pState->height);
+        glfwSetWindowUserPointer(pWindow, pState);
+
+        const auto pMonitor = glfwGetPrimaryMonitor();
+        const auto pMode = glfwGetVideoMode(pMonitor);
+        glfwSetWindowMonitor(pWindow, pMonitor, 0, 0, pMode->width, pMode->height, pMode->refreshRate);
+    }
+}
+
 void glfwKeyCallback(GLFWwindow* pWindow, const int key, const int /*scancode*/, const int action, const int /*mods*/)
 {
     if (key == GLFW_KEY_ESCAPE && action == GLFW_RELEASE)
         glfwSetWindowShouldClose(pWindow, GLFW_TRUE);
+
+    if (key == GLFW_KEY_F11 && action == GLFW_RELEASE)
+        glfwToggleFullscreen(pWindow);
 }
 
 void glErrorCallback(const GLenum /*source*/, const GLenum /*type*/, const GLuint id, const GLenum /*severity*/, const GLsizei /*length*/, const GLchar* pMessage, const void* /*pUserParam*/)
@@ -153,6 +188,7 @@ int main(const int /*argc*/, const char** ppArgv)
 
     glfwMakeContextCurrent(pWindow);
     glfwSetKeyCallback(pWindow, glfwKeyCallback);
+    glfwSwapInterval(1);
 
     if (const auto error = glewInit())
     {
@@ -168,6 +204,18 @@ int main(const int /*argc*/, const char** ppArgv)
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
 
     glClearColor(0.2f, 0.3f, 1.0f, 1.0f);
+
+    ImGui::CreateContext();
+    auto& io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    io.ConfigFlags |= ImGuiConfigFlags_DpiEnableScaleFonts;
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+    io.ConfigDockingTransparentPayload = true;
+    io.ConfigViewportsNoTaskBarIcon = true;
+
+    ImGui_ImplOpenGL3_Init();
+    ImGui_ImplGlfw_InitForOpenGL(pWindow, true);
 
     constexpr GLfloat pVertices[]{-1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 1.0f, 1.0f, -1.0f};
     constexpr GLuint pIndices[]{0, 1, 2, 2, 3, 0};
@@ -227,11 +275,11 @@ int main(const int /*argc*/, const char** ppArgv)
         }
     }
 
-    glm::vec3 origin(0.0f, 0.5f, -2.0f);
+    glm::vec3 origin(0.0f, 0.5f, -1.0f);
     glm::mat4 camera_to_world = inverse(lookAt(origin, origin + glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f)));
     glm::mat4 screen_to_camera;
 
-    uint32_t sample_count = 0;
+    uint32_t sample_count = 1;
 
     int prev_width = 0, prev_height = 0;
 
@@ -246,7 +294,7 @@ int main(const int /*argc*/, const char** ppArgv)
             prev_width = width;
             prev_height = height;
 
-            sample_count = 0;
+            sample_count = 1;
 
             glViewport(0, 0, width, height);
 
@@ -255,14 +303,14 @@ int main(const int /*argc*/, const char** ppArgv)
             glBindTexture(GL_TEXTURE_2D, 0);
             glBindImageTexture(0, accum, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
 
-            screen_to_camera = inverse(glm::perspectiveFov(glm::radians(70.0f), static_cast<float>(width), static_cast<float>(height), 0.001f, 1000.0f));
+            screen_to_camera = inverse(glm::perspectiveFov(glm::radians(90.0f), static_cast<float>(width), static_cast<float>(height), 0.001f, 1000.0f));
 
             glUniform3fv(glGetUniformLocation(program, "Origin"), 1, &origin[0]);
             glUniformMatrix4fv(glGetUniformLocation(program, "CameraToWorld"), 1, GL_FALSE, &camera_to_world[0][0]);
             glUniformMatrix4fv(glGetUniformLocation(program, "ScreenToCamera"), 1, GL_FALSE, &screen_to_camera[0][0]);
         }
 
-        glClear(GL_COLOR_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glBindVertexArray(vao);
         glUniform1ui(glGetUniformLocation(program, "SampleCount"), sample_count++);
@@ -270,9 +318,33 @@ int main(const int /*argc*/, const char** ppArgv)
         glBindVertexArray(0);
         glUseProgram(0);
 
+        ImGui_ImplGlfw_NewFrame();
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui::NewFrame();
+
+        ImGui::DockSpaceOverViewport(0, nullptr, ImGuiDockNodeFlags_PassthruCentralNode);
+
+        if (ImGui::Begin("Scene"))
+        {
+        }
+        ImGui::End();
+
+        ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+        {
+            ImGui::UpdatePlatformWindows();
+            ImGui::RenderPlatformWindowsDefault();
+            glfwMakeContextCurrent(pWindow);
+        }
+
         glfwSwapBuffers(pWindow);
         glfwPollEvents();
     }
+
+    ImGui_ImplGlfw_Shutdown();
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui::DestroyContext();
 
     glfwDestroyWindow(pWindow);
     glfwTerminate();

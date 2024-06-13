@@ -25,9 +25,9 @@ bool Sphere_Hit(in Sphere self, in Ray ray, in Interval ray_t, inout Record rec)
 
     rec.t = root;
     rec.p = Ray_At(ray, root);
-
     vec3 outward_normal = (rec.p - self.center) / self.radius;
     Record_SetNormal(rec, ray, outward_normal);
+    rec.material = self.material;
 
     return true;
 }

@@ -18,16 +18,38 @@ struct Record {
     vec3 p;
     vec3 normal;
     bool front_face;
+    uint material;
 };
 
 struct Sphere {
     vec3 center;
     float radius;
+    uint material;
+};
+
+struct Triangle {
+    vec3 p0;
+    vec3 p1;
+    vec3 p2;
+    uint material;
+};
+
+struct Material {
+    vec3 albedo;
+    vec3 emission;
+    float roughness;
+    float metallic;
 };
 
 struct Scene {
     Sphere spheres[50];
     int sphere_count;
+
+    Triangle triangles[50];
+    int triangle_count;
+
+    Material materials[50];
+    int material_count;
 };
 
 void Seed(in uint _seed);
@@ -40,17 +62,15 @@ vec3 RandomVec3(in float min, in float max);
 vec3 RandomInUnitSphere();
 
 vec3 Ray_At(in Ray self, in float t);
-
 bool Interval_Contains(in Interval self, in float x);
-
 void Record_SetNormal(inout Record self, in Ray ray, in vec3 outward_normal);
 
 bool Sphere_Hit(in Sphere self, in Ray ray, in Interval ray_t, inout Record rec);
-
+bool Triangle_Hit(in Triangle self, in Ray ray, in Interval ray_t, inout Record rec);
 bool Scene_Hit(in Scene self, in Ray ray, in Interval ray_t, inout Record rec);
 
 vec3 SendRay(in Scene scene, in Ray ray);
-vec3 Hit(in Ray ray, in Record rec);
+void Hit(in Scene scene, inout Ray ray, in Record rec, inout vec3 contribution, inout vec3 light);
 vec3 Miss(in Ray ray);
 
 #endif // _COMMON_GLSL_
