@@ -7,8 +7,8 @@
 #include <vector>
 #include <backends/imgui_impl_glfw.h>
 #include <backends/imgui_impl_opengl3.h>
-#include <gl/glew.h>
-#include <glfw/glfw3.h>
+#include <GL/glew.h>
+#include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/matrix_transform.hpp>
@@ -57,8 +57,10 @@ void glfwKeyCallback(GLFWwindow* pWindow, const int key, const int /*scancode*/,
         glfwToggleFullscreen(pWindow);
 }
 
-void glErrorCallback(const GLenum /*source*/, const GLenum /*type*/, const GLuint id, const GLenum /*severity*/, const GLsizei /*length*/, const GLchar* pMessage, const void* /*pUserParam*/)
+void glErrorCallback(const GLenum /*source*/, const GLenum /*type*/, const GLuint id, const GLenum severity, const GLsizei /*length*/, const GLchar* pMessage, const void* /*pUserParam*/)
 {
+    if (severity != GL_DEBUG_SEVERITY_HIGH)
+        return;
     std::cerr << "[GL 0x" << std::hex << id << std::dec << "] " << pMessage << std::endl;
 }
 
