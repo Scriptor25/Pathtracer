@@ -29,22 +29,26 @@ struct WindowState
 
 void glfwToggleFullscreen(GLFWwindow* pWindow)
 {
-    if (glfwGetWindowMonitor(pWindow))
+    auto pState = static_cast<WindowState*>(glfwGetWindowUserPointer(pWindow));
+    if (pState)
     {
-        const auto pState = static_cast<WindowState*>(glfwGetWindowUserPointer(pWindow));
         glfwSetWindowMonitor(pWindow, nullptr, pState->xpos, pState->ypos, pState->width, pState->height, GLFW_DONT_CARE);
+        glfwSetWindowAttrib(pWindow, GLFW_RESIZABLE, GLFW_TRUE);
+
+        glfwSetWindowUserPointer(pWindow, nullptr);
         delete pState;
     }
     else
     {
-        const auto pState = new WindowState();
+        pState = new WindowState();
         glfwGetWindowPos(pWindow, &pState->xpos, &pState->ypos);
         glfwGetWindowSize(pWindow, &pState->width, &pState->height);
         glfwSetWindowUserPointer(pWindow, pState);
 
         const auto pMonitor = glfwGetPrimaryMonitor();
         const auto pMode = glfwGetVideoMode(pMonitor);
-        glfwSetWindowMonitor(pWindow, pMonitor, 0, 0, pMode->width, pMode->height, pMode->refreshRate);
+        glfwSetWindowMonitor(pWindow, nullptr, 0, 0, pMode->width, pMode->height, pMode->refreshRate);
+        glfwSetWindowAttrib(pWindow, GLFW_RESIZABLE, GLFW_FALSE);
     }
 }
 
@@ -167,6 +171,23 @@ ShaderInfo parseShaderInfo(const std::filesystem::path& path)
     };
 }
 
+struct Triangle
+{
+    alignas(16) glm::vec3 P0;
+    alignas(16) glm::vec3 P1;
+    alignas(16) glm::vec3 P2;
+    uint32_t Material;
+};
+
+struct Material
+{
+    alignas(16) glm::vec3 Albedo;
+    alignas(16) glm::vec3 Emission;
+    uint32_t Emissive;
+    float_t Roughness;
+    float_t Metallic;
+};
+
 int main(const int /*argc*/, const char** ppArgv)
 {
     const auto assets = std::filesystem::path(ppArgv[0]).parent_path() / "assets";
@@ -222,7 +243,35 @@ int main(const int /*argc*/, const char** ppArgv)
     constexpr GLfloat pVertices[]{-1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 1.0f, 1.0f, -1.0f};
     constexpr GLuint pIndices[]{0, 1, 2, 2, 3, 0};
 
-    GLuint vao, vbo, accum;
+    Triangle triangles[]
+    {
+        Triangle(glm::vec3(1, -1, -1), glm::vec3(1, 1, -1), glm::vec3(-1, 1, -1), 0),
+        Triangle(glm::vec3(-1, 1, -1), glm::vec3(-1, -1, -1), glm::vec3(1, -1, -1), 0),
+
+        Triangle(glm::vec3(-1, -1, -1), glm::vec3(-1, 1, -1), glm::vec3(-1, 1, 1), 1),
+        Triangle(glm::vec3(-1, 1, 1), glm::vec3(-1, -1, 1), glm::vec3(-1, -1, -1), 1),
+
+        Triangle(glm::vec3(1, -1, 1), glm::vec3(1, 1, 1), glm::vec3(1, 1, -1), 2),
+        Triangle(glm::vec3(1, 1, -1), glm::vec3(1, -1, -1), glm::vec3(1, -1, 1), 2),
+
+        Triangle(glm::vec3(-1, -1, -1), glm::vec3(-1, -1, 1), glm::vec3(1, -1, 1), 0),
+        Triangle(glm::vec3(1, -1, 1), glm::vec3(1, -1, -1), glm::vec3(-1, -1, -1), 0),
+
+        Triangle(glm::vec3(1, 1, 1), glm::vec3(-1, 1, 1), glm::vec3(-1, 1, -1), 0),
+        Triangle(glm::vec3(-1, 1, -1), glm::vec3(1, 1, -1), glm::vec3(1, 1, 1), 0),
+
+        Triangle(glm::vec3(0.30, 0.99, 0.30), glm::vec3(-0.30, 0.99, 0.30), glm::vec3(-0.30, 0.99, -0.30), 3),
+        Triangle(glm::vec3(-0.30, 0.99, -0.30), glm::vec3(0.30, 0.99, -0.30), glm::vec3(0.30, 0.99, 0.30), 3),
+    };
+    Material materials[]
+    {
+        Material(glm::vec3(0.9f, 0.9f, 0.9f), glm::vec3(), 0),
+        Material(glm::vec3(0.8f, 0.0f, 0.0f), glm::vec3(), 0),
+        Material(glm::vec3(0.0f, 0.8f, 0.0f), glm::vec3(), 0),
+        Material(glm::vec3(), glm::vec3(20.0f), 1),
+    };
+
+    GLuint vao, vbo, accum, triangle_ssbo, material_ssbo;
 
     glGenVertexArrays(1, &vao);
     glBindVertexArray(vao);
@@ -233,6 +282,18 @@ int main(const int /*argc*/, const char** ppArgv)
     glBufferData(GL_ARRAY_BUFFER, sizeof(pVertices), pVertices, GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
+
+    glGenBuffers(1, &triangle_ssbo);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, triangle_ssbo);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(triangles), &triangles, GL_STATIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, triangle_ssbo);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
+    glGenBuffers(1, &material_ssbo);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, material_ssbo);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(materials), materials, GL_STATIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, material_ssbo);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
     glGenTextures(1, &accum);
 
@@ -277,8 +338,8 @@ int main(const int /*argc*/, const char** ppArgv)
         }
     }
 
-    glm::vec3 origin(0.0f, 0.5f, -1.0f);
-    glm::mat4 camera_to_world = inverse(lookAt(origin, origin + glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f)));
+    glm::vec3 origin(0.0f, 0.0f, 4.0f);
+    glm::mat4 camera_to_world = inverse(lookAt(origin, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f)));
     glm::mat4 screen_to_camera;
 
     uint32_t sample_count = 1;
@@ -289,6 +350,12 @@ int main(const int /*argc*/, const char** ppArgv)
     {
         int width, height;
         glfwGetFramebufferSize(pWindow, &width, &height);
+
+        if (width == 0 || height == 0)
+        {
+            glfwWaitEvents();
+            continue;
+        }
 
         glUseProgram(program);
         if (width != prev_width || height != prev_height)
@@ -305,7 +372,7 @@ int main(const int /*argc*/, const char** ppArgv)
             glBindTexture(GL_TEXTURE_2D, 0);
             glBindImageTexture(0, accum, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
 
-            screen_to_camera = inverse(glm::perspectiveFov(glm::radians(90.0f), static_cast<float>(width), static_cast<float>(height), 0.001f, 1000.0f));
+            screen_to_camera = inverse(glm::perspectiveFov(glm::radians(40.0f), static_cast<float>(width), static_cast<float>(height), 0.001f, 1000.0f));
 
             glUniform3fv(glGetUniformLocation(program, "Origin"), 1, &origin[0]);
             glUniformMatrix4fv(glGetUniformLocation(program, "CameraToWorld"), 1, GL_FALSE, &camera_to_world[0][0]);

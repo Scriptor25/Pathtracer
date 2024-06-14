@@ -40,6 +40,10 @@ vec3 RandomVec3(in float min, in float max) {
     return vec3(Random(min, max), Random(min, max), Random(min, max));
 }
 
+vec3 RandomUnitVec3() {
+    return normalize(RandomVec3(-1.0, 1.0));
+}
+
 vec3 RandomInUnitSphere() {
     vec3 v;
     for (int i = 0; i < 10; ++i) {

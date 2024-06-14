@@ -2,6 +2,7 @@
 #define _COMMON_GLSL_
 
 precision highp float;
+precision highp int;
 
 struct Ray {
     vec3 origin;
@@ -37,19 +38,9 @@ struct Triangle {
 struct Material {
     vec3 albedo;
     vec3 emission;
+    uint emissive;
     float roughness;
     float metallic;
-};
-
-struct Scene {
-    Sphere spheres[50];
-    int sphere_count;
-
-    Triangle triangles[50];
-    int triangle_count;
-
-    Material materials[50];
-    int material_count;
 };
 
 void Seed(in uint _seed);
@@ -59,6 +50,7 @@ vec2 RandomVec2();
 vec2 RandomVec2(in float min, in float max);
 vec3 RandomVec3();
 vec3 RandomVec3(in float min, in float max);
+vec3 RandomUnitVec3();
 vec3 RandomInUnitSphere();
 
 vec3 Ray_At(in Ray self, in float t);
@@ -67,10 +59,9 @@ void Record_SetNormal(inout Record self, in Ray ray, in vec3 outward_normal);
 
 bool Sphere_Hit(in Sphere self, in Ray ray, in Interval ray_t, inout Record rec);
 bool Triangle_Hit(in Triangle self, in Ray ray, in Interval ray_t, inout Record rec);
-bool Scene_Hit(in Scene self, in Ray ray, in Interval ray_t, inout Record rec);
 
-vec3 SendRay(in Scene scene, in Ray ray);
-void Hit(in Scene scene, inout Ray ray, in Record rec, inout vec3 contribution, inout vec3 light);
+vec3 SendRay(in Ray ray);
+bool Scatter(inout Ray ray, in Record rec, inout vec3 contribution, inout vec3 light);
 vec3 Miss(in Ray ray);
 
 #endif // _COMMON_GLSL_

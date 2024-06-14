@@ -8,7 +8,7 @@ bool Triangle_Hit(in Triangle self, in Ray ray, in Interval ray_t, inout Record 
     vec3 cross_dir_e2 = cross(ray.direction, edge2);
     float det = dot(edge1, cross_dir_e2);
 
-    if (abs(det) < 1e-8) {
+    if (abs(det) < 1e-5) {
         return false;
     }
 
@@ -38,6 +38,8 @@ bool Triangle_Hit(in Triangle self, in Ray ray, in Interval ray_t, inout Record 
     vec3 outward_normal = cross(normalize(edge1), normalize(edge2));
     Record_SetNormal(rec, ray, outward_normal);
     rec.material = self.material;
+
+    if (dot(outward_normal, ray.direction) > 0.0) return false;
 
     return true;
 }
