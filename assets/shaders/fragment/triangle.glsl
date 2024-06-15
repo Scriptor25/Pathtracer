@@ -33,13 +33,14 @@ bool Triangle_Hit(in Triangle self, in Ray ray, in Interval ray_t, inout Record 
         return false;
     }
 
+    float w = 1.0 - u - v;
+
     rec.t = t;
     rec.p = Ray_At(ray, t);
+    rec.uv = self.uv0 * w + self.uv1 * u + self.uv2 * v;
     vec3 outward_normal = cross(normalize(edge1), normalize(edge2));
     Record_SetNormal(rec, ray, outward_normal);
     rec.material = self.material;
 
-    if (dot(outward_normal, ray.direction) > 0.0) return false;
-
-    return true;
+    return rec.front_face;
 }

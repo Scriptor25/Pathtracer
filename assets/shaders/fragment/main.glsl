@@ -7,7 +7,7 @@ layout (location = 0) out vec4 Color;
 uniform layout (binding = 0, rgba32f) image2D Accumulation;
 
 uniform uint SampleCount;
-uniform uint MaxSampleCount = 20000u;
+uniform uint MaxSampleCount = 10000u;
 uniform vec3 Origin;
 uniform mat4 CameraToWorld;
 uniform mat4 ScreenToCamera;
