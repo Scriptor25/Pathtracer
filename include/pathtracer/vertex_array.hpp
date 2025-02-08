@@ -2,15 +2,17 @@
 
 #include <GL/glew.h>
 
-namespace pathtracer
+namespace path_tracer
 {
     class VertexArray
     {
     public:
         VertexArray();
+
         ~VertexArray();
 
         void Bind() const;
+
         void Unbind() const;
 
     private:

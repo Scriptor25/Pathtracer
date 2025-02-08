@@ -1,11 +1,12 @@
 #version 450 core
+
 #include "common.incl"
 
 layout (binding = 0, std430) readonly buffer TriangleBuffer {
     Triangle triangles[];
 };
 
-bool Triangle_Hit(in uint index, in Ray ray, in float ray_t_min, in float ray_t_max, inout Record rec) {
+bool Triangle_Hit(in uint index, in Ray ray, in Interval ray_t, inout Record rec) {
 
     Triangle self = triangles[index];
 
@@ -35,7 +36,7 @@ bool Triangle_Hit(in uint index, in Ray ray, in float ray_t_min, in float ray_t_
 
     float t = inv_det * dot(edge2, cross_s_e1);
 
-    if (!(ray_t_min <= t && t <= ray_t_max)) {
+    if (!Interval_Surrounds(ray_t, t)) {
         return false;
     }
 

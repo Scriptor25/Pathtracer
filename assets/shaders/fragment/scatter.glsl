@@ -1,4 +1,5 @@
 #version 450 core
+
 #include "common.incl"
 
 layout (binding = 1, std430) readonly buffer MaterialBuffer {
@@ -9,12 +10,13 @@ bool refract(in vec3 v, in vec3 n, in float ni_over_nt, out vec3 refracted) {
     vec3 uv = normalize(v);
     float dt = dot(uv, n);
     float discriminant = 1.0 - ni_over_nt * ni_over_nt * (1.0 - dt * dt);
+
     if (discriminant > 0) {
         refracted = ni_over_nt * (uv - n * dt) - n * sqrt(discriminant);
         return true;
-    } else {
-        return false;
     }
+
+    return false;
 }
 
 float schlick(in float cosine, in float ref_idx) {
@@ -27,7 +29,9 @@ bool Scatter(inout Ray ray, in Record rec, inout vec3 contribution, inout vec3 l
     Material mat = materials[rec.material];
 
     if (length(mat.emissive) > 0.0) {
-        if (rec.front_face) light += contribution * mat.emissive;
+        if (rec.front_face) {
+            light += contribution * mat.emissive;
+        }
         return false;
     }
 
@@ -51,13 +55,11 @@ bool Scatter(inout Ray ray, in Record rec, inout vec3 contribution, inout vec3 l
         } else {
             direction = reflected;
         }
-    }
-    else {
+    } else {
         if (mat.metalness < 1.0) {
             vec3 diffuse = rec.normal + RandomUnitVec3();
             direction = mix(diffuse, reflected, mat.metalness);
-        }
-        else {
+        } else {
             direction = reflected;
         }
 

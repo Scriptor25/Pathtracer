@@ -69,6 +69,11 @@ struct Texture {
     vec2 uv1;
 };
 
+struct Interval {
+    float min;
+    float max;
+};
+
 void Seed(in uint _seed);
 float Random();
 float Random(in float min, in float max);
@@ -82,12 +87,15 @@ vec3 RandomInUnitSphere();
 vec3 Ray_At(in Ray self, in float t);
 void Record_SetNormal(inout Record self, in Ray ray, in vec3 outward_normal);
 
-bool Sphere_Hit(in Sphere self, in Ray ray, in float ray_t_min, in float ray_t_max, inout Record rec);
-bool Triangle_Hit(in uint index, in Ray ray, in float ray_t_min, in float ray_t_max, inout Record rec);
-bool BVHNode_Hit(in uint index, in Ray ray, in float ray_t_min, in float ray_t_max);
+bool Sphere_Hit(in Sphere self, in Ray ray, in Interval ray_t, inout Record rec);
+bool Triangle_Hit(in uint index, in Ray ray, in Interval ray_t, inout Record rec);
+bool BVHNode_Hit(in uint index, in Ray ray, in Interval ray_t);
+
+bool Interval_Contains(in Interval self, in float x);
+bool Interval_Surrounds(in Interval self, in float x);
 
 vec3 SendRay(in Ray ray);
 bool Scatter(inout Ray ray, in Record rec, inout vec3 contribution, inout vec3 light);
 vec3 Miss(in Ray ray);
 
-#endif // _COMMON_GLSL_
+#endif// _COMMON_GLSL_

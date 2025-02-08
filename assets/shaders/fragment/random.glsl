@@ -1,4 +1,5 @@
 #version 450 core
+
 #include "common.incl"
 
 uint seed;

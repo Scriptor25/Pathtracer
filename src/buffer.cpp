@@ -1,32 +1,33 @@
 #include <pathtracer/buffer.hpp>
 
-pathtracer::Buffer::Buffer(const GLenum target, const GLenum usage)
-    : m_Target(target), m_Usage(usage)
+path_tracer::Buffer::Buffer(const GLenum target, const GLenum usage)
+    : m_Target(target),
+      m_Usage(usage)
 {
     glGenBuffers(1, &m_Handle);
 }
 
-pathtracer::Buffer::~Buffer()
+path_tracer::Buffer::~Buffer()
 {
     glDeleteBuffers(1, &m_Handle);
 }
 
-void pathtracer::Buffer::Bind() const
+void path_tracer::Buffer::Bind() const
 {
     glBindBuffer(m_Target, m_Handle);
 }
 
-void pathtracer::Buffer::Unbind() const
+void path_tracer::Buffer::Unbind() const
 {
     glBindBuffer(m_Target, 0);
 }
 
-void pathtracer::Buffer::Data(const GLsizeiptr size, const void* pData) const
+void path_tracer::Buffer::Data(const GLsizeiptr size, const void *data) const
 {
-    glBufferData(m_Target, size, pData, m_Usage);
+    glBufferData(m_Target, size, data, m_Usage);
 }
 
-void pathtracer::Buffer::BindBase(const GLuint i) const
+void path_tracer::Buffer::BindBase(const GLuint i) const
 {
     glBindBufferBase(m_Target, i, m_Handle);
 }

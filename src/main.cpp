@@ -17,70 +17,77 @@
 #include <pathtracer/shader.hpp>
 #include <pathtracer/vertex_array.hpp>
 #include <pathtracer/window.hpp>
-#include <yaml-cpp/yaml.h>
 
-void glErrorCallback(const GLenum /*source*/, const GLenum /*type*/, const GLuint id, const GLenum severity, const GLsizei /*length*/, const GLchar* pMessage, const void* /*pUserParam*/)
+void gl_debug_message_callback(
+    const GLenum /*source*/,
+    const GLenum /*type*/,
+    const GLuint id,
+    const GLenum severity,
+    const GLsizei /*length*/,
+    const GLchar *pMessage,
+    const void * /*pUserParam*/)
 {
     if (severity != GL_DEBUG_SEVERITY_HIGH)
         return;
     std::cerr << "[GL 0x" << std::hex << id << std::dec << "] " << pMessage << std::endl;
 }
 
-int main(const int /*argc*/, const char** ppArgv)
+int main()
 {
-    const auto assets = std::filesystem::path(ppArgv[0]).parent_path() / "assets";
+    const auto assets = std::filesystem::canonical("assets");
 
-    const pathtracer::Window window(600, 600);
+    const path_tracer::Window window(600, 600, "PathTracer", assets / "icon.png");
 
     if (const auto error = glewInit())
     {
-        std::cerr << "glewInit " << glewGetErrorString(error) << std::endl;
-        return -1;
+        std::cerr
+                << "[GLEW 0x"
+                << std::hex
+                << error
+                << std::dec
+                << "] failed to initialize glew: "
+                << glewGetErrorString(error)
+                << std::endl;
+        return 1;
     }
 
-    glDebugMessageCallback(glErrorCallback, nullptr);
+    glDebugMessageCallback(gl_debug_message_callback, nullptr);
     glEnable(GL_DEBUG_OUTPUT);
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
 
     glClearColor(0.2f, 0.3f, 1.0f, 1.0f);
 
     ImGui::CreateContext();
-    auto& io = ImGui::GetIO();
+    auto &io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io.ConfigFlags |= ImGuiConfigFlags_DpiEnableScaleFonts;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-    io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+    // io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
     io.ConfigDockingTransparentPayload = true;
     io.ConfigViewportsNoTaskBarIcon = true;
 
     ImGui_ImplOpenGL3_Init();
-    ImGui_ImplGlfw_InitForOpenGL(window.GLFW(), true);
+    ImGui_ImplGlfw_InitForOpenGL(window.Handle(), true);
 
-    constexpr GLfloat pVertices[]{-1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 1.0f, 1.0f, -1.0f};
-    constexpr GLuint pIndices[]{0, 1, 2, 2, 3, 0};
+    constexpr GLfloat VERTICES[]{-1.f, -1.f, -1.f, 1.f, 1.f, 1.f, 1.f, -1.f};
+    constexpr GLuint INDICES[]{0u, 1u, 2u, 2u, 3u, 0u};
 
-    const pathtracer::VertexArray vertex_array;
+    const path_tracer::VertexArray vertex_array;
     vertex_array.Bind();
-    const pathtracer::Buffer vertex_buffer(GL_ARRAY_BUFFER, GL_STATIC_DRAW);
+    const path_tracer::Buffer vertex_buffer(GL_ARRAY_BUFFER, GL_STATIC_DRAW);
     vertex_buffer.Bind();
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(GLfloat), nullptr);
-    vertex_buffer.Data(sizeof(pVertices), pVertices);
+    vertex_buffer.Data(sizeof(VERTICES), VERTICES);
     vertex_buffer.Unbind();
     vertex_array.Unbind();
 
-    GLuint accum;
-    glGenTextures(1, &accum);
+    GLuint accumulation_texture;
+    glGenTextures(1, &accumulation_texture);
 
-    pathtracer::Shader* pShader;
-    try { pShader = new pathtracer::Shader(assets / "main.yaml"); }
-    catch (const std::runtime_error& error)
-    {
-        std::cerr << error.what() << std::endl;
-        return -1;
-    }
+    const path_tracer::Shader shader(assets / "main.yaml");
 
-    pathtracer::Scene scene;
+    path_tracer::Scene scene;
     scene.LoadModel(assets / "objects" / "cornell_box.obj", aiProcess_GenNormals);
 
     // scene.LoadModel(assets / "objects" / "axis.obj");
@@ -89,27 +96,39 @@ int main(const int /*argc*/, const char** ppArgv)
     // scene.GetLastModel().NormalTransform = transpose(scene.GetLastModel().InverseTransform);
 
     scene.LoadModel(assets / "objects" / "cow.obj", aiProcess_GenSmoothNormals);
-    scene.GetLastModel().Transform = scale(rotate(translate(glm::mat4(1.0f), glm::vec3(-0.5f, -0.65f, 0.0f)), glm::radians(-135.0f), normalize(glm::vec3(0.0f, 1.0f, 0.0f))), glm::vec3(0.1f));
+    scene.GetLastModel().Transform = scale(
+        rotate(
+            translate(glm::mat4(1.0f), glm::vec3(-0.5f, -0.65f, 0.0f)),
+            glm::radians(-135.0f),
+            normalize(glm::vec3(0.0f, 1.0f, 0.0f))),
+        glm::vec3(0.1f));
     scene.GetLastModel().InverseTransform = inverse(scene.GetLastModel().Transform);
     scene.GetLastModel().NormalTransform = transpose(scene.GetLastModel().InverseTransform);
 
     scene.LoadModel(assets / "objects" / "teapot.obj", aiProcess_GenSmoothNormals);
-    scene.GetLastModel().Transform = scale(rotate(translate(glm::mat4(1.0f), glm::vec3(0.5f, -1.0f, 0.0f)), glm::radians(-45.0f), normalize(glm::vec3(0.0f, 1.0f, 0.0f))), glm::vec3(0.2f));
+    scene.GetLastModel().Transform = scale(
+        rotate(
+            translate(glm::mat4(1.0f), glm::vec3(0.5f, -1.0f, 0.0f)),
+            glm::radians(-45.0f),
+            normalize(glm::vec3(0.0f, 1.0f, 0.0f))),
+        glm::vec3(0.2f));
     scene.GetLastModel().InverseTransform = inverse(scene.GetLastModel().Transform);
     scene.GetLastModel().NormalTransform = transpose(scene.GetLastModel().InverseTransform);
 
     scene.Upload();
 
-    glm::vec3 origin(0.0f, 0.0f, 3.75f);
-    glm::mat4 camera_to_world = inverse(lookAt(origin, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f)));
+    constexpr glm::vec3 origin(0.f, 0.f, 3.75f);
+    constexpr glm::vec3 target(0.f, 0.f, 0.f);
+    constexpr glm::vec3 up(0.f, 1.f, 0.f);
+    auto camera_to_world = inverse(lookAt(origin, target, up));
 
-    unsigned sample_count = 1;
-    int prev_width = 0, prev_height = 0;
+    auto sample_count = 1u;
+    auto previous_width = 0, previous_height = 0;
 
     do
     {
         int width, height;
-        window.GetFramebufferSize(&width, &height);
+        window.GetFrameBufferSize(width, height);
 
         if (width == 0 || height == 0)
         {
@@ -117,36 +136,62 @@ int main(const int /*argc*/, const char** ppArgv)
             continue;
         }
 
-        pShader->Bind();
-        if (width != prev_width || height != prev_height)
+        shader.Bind();
+        if (width != previous_width || height != previous_height)
         {
-            prev_width = width;
-            prev_height = height;
+            previous_width = width;
+            previous_height = height;
 
             sample_count = 1;
 
             glViewport(0, 0, width, height);
 
-            glBindTexture(GL_TEXTURE_2D, accum);
+            glBindTexture(GL_TEXTURE_2D, accumulation_texture);
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
             glBindTexture(GL_TEXTURE_2D, 0);
-            glBindImageTexture(0, accum, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
+            glBindImageTexture(0, accumulation_texture, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
 
-            glm::mat4 screen_to_camera = inverse(glm::perspectiveFov(glm::radians(40.0f), static_cast<float>(width), static_cast<float>(height), 0.001f, 1000.0f));
+            auto screen_to_camera = inverse(
+                glm::perspectiveFov(
+                    glm::radians(40.0f),
+                    static_cast<float>(width),
+                    static_cast<float>(height),
+                    .3f,
+                    100.f));
 
-            pShader->SetUniform("Origin", [&origin](const GLint loc) { glUniform3fv(loc, 1, &origin[0]); });
-            pShader->SetUniform("CameraToWorld", [&camera_to_world](const GLint loc) { glUniformMatrix4fv(loc, 1, GL_FALSE, &camera_to_world[0][0]); });
-            pShader->SetUniform("ScreenToCamera", [&screen_to_camera](const GLint loc) { glUniformMatrix4fv(loc, 1, GL_FALSE, &screen_to_camera[0][0]); });
+            shader.SetUniform(
+                "Origin",
+                [&origin](const GLint loc)
+                {
+                    glUniform3fv(loc, 1, &origin[0]);
+                });
+            shader.SetUniform(
+                "CameraToWorld",
+                [&camera_to_world](const GLint loc)
+                {
+                    glUniformMatrix4fv(loc, 1, GL_FALSE, &camera_to_world[0][0]);
+                });
+            shader.SetUniform(
+                "ScreenToCamera",
+                [&screen_to_camera](const GLint loc)
+                {
+                    glUniformMatrix4fv(loc, 1, GL_FALSE, &screen_to_camera[0][0]);
+                });
         }
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        pShader->SetUniform("SampleCount", [&sample_count](const GLint loc) { glUniform1ui(loc, sample_count++); });
+        shader.SetUniform(
+            "SampleCount",
+            [&sample_count](const GLint loc)
+            {
+                glUniform1ui(loc, sample_count++);
+            });
 
         vertex_array.Bind();
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, pIndices);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, INDICES);
         vertex_array.Unbind();
-        pShader->Unbind();
+        shader.Unbind();
 
         ImGui_ImplGlfw_NewFrame();
         ImGui_ImplOpenGL3_NewFrame();
@@ -155,9 +200,7 @@ int main(const int /*argc*/, const char** ppArgv)
         ImGui::DockSpaceOverViewport(0, nullptr, ImGuiDockNodeFlags_PassthruCentralNode);
 
         if (ImGui::Begin("Stats"))
-        {
             ImGui::Text("Frame: %d", sample_count);
-        }
         ImGui::End();
 
         ImGui::Render();
@@ -174,6 +217,4 @@ int main(const int /*argc*/, const char** ppArgv)
     ImGui_ImplGlfw_Shutdown();
     ImGui_ImplOpenGL3_Shutdown();
     ImGui::DestroyContext();
-
-    return 0;
 }

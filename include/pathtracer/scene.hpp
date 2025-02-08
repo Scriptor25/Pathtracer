@@ -5,12 +5,13 @@
 #include <glm/glm.hpp>
 #include <pathtracer/buffer.hpp>
 
-namespace pathtracer
+namespace path_tracer
 {
     struct Triangle
     {
         [[nodiscard]] glm::vec3 Center() const;
-        void AddBounds(glm::vec3& min, glm::vec3& max) const;
+
+        void AddBounds(glm::vec3 &min, glm::vec3 &max) const;
 
         alignas(16) glm::vec3 P0;
         alignas(16) glm::vec3 P1;
@@ -38,10 +39,10 @@ namespace pathtracer
     {
         alignas(16) glm::vec3 Diffuse;
         alignas(4) int DiffuseTexture;
-        alignas(16) glm::vec3 Emissive;
-        alignas(4) int EmissiveTexture;
+        alignas(16) glm::vec3 Emission;
+        alignas(4) int EmissionTexture;
         alignas(4) float Roughness;
-        alignas(4) float Metalness;
+        alignas(4) float Metalic;
         alignas(4) float Transparency;
         alignas(4) float IR;
     };
@@ -59,12 +60,15 @@ namespace pathtracer
     public:
         Scene();
 
-        void LoadModel(const std::filesystem::path& path, unsigned int flags);
+        void LoadModel(const std::filesystem::path &path, unsigned int flags);
+
         size_t GenerateBVHTree(unsigned start, unsigned end, unsigned depth);
+
         void Upload() const;
 
-        Model& GetModel(size_t i);
-        Model& GetLastModel();
+        Model &GetModel(size_t i);
+
+        Model &GetLastModel();
 
     private:
         std::vector<Triangle> m_Triangles;

@@ -1,7 +1,8 @@
 #version 450 core
+
 #include "common.incl"
 
-bool Sphere_Hit(in Sphere self, in Ray ray, in float ray_t_min, in float ray_t_max, inout Record rec) {
+bool Sphere_Hit(in Sphere self, in Ray ray, in Interval ray_t, inout Record rec) {
 
     vec3 oc = self.center - ray.origin;
     float a = dot(ray.direction, ray.direction);
@@ -17,9 +18,9 @@ bool Sphere_Hit(in Sphere self, in Ray ray, in float ray_t_min, in float ray_t_m
     float inva = 1.0 / a;
 
     float root = (b - sqrtd) * inva;
-    if (!(ray_t_min <= root && root <= ray_t_max)) {
+    if (!Interval_Surrounds(ray_t, root)) {
         root = (b + sqrtd) * inva;
-        if (!(ray_t_min <= root && root <= ray_t_max)) {
+        if (!Interval_Surrounds(ray_t, root)) {
             return false;
         }
     }

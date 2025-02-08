@@ -1,13 +1,16 @@
 #pragma once
 
+#define GLFW_INCLUDE_NONE
+
+#include <filesystem>
 #include <GLFW/glfw3.h>
 
-namespace pathtracer
+namespace path_tracer
 {
     struct WindowState
     {
-        int xpos;
-        int ypos;
+        int pos_x;
+        int pos_y;
         int width;
         int height;
     };
@@ -15,17 +18,19 @@ namespace pathtracer
     class Window
     {
     public:
-        Window(int width, int height);
+        Window(int width, int height, const std::string &title, const std::filesystem::path &icon);
+
         ~Window();
 
-        [[nodiscard]] GLFWwindow* GLFW() const;
+        [[nodiscard]] GLFWwindow *Handle() const;
 
         [[nodiscard]] bool Frame() const;
+
         void MakeContextCurrent() const;
 
-        void GetFramebufferSize(int* pWidth, int* pHeight) const;
+        void GetFrameBufferSize(int &width, int &height) const;
 
     private:
-        GLFWwindow* m_GLFW;
+        GLFWwindow *m_Handle;
     };
 }

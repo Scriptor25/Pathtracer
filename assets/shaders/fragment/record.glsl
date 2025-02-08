@@ -1,4 +1,5 @@
 #version 450 core
+
 #include "common.incl"
 
 void Record_SetNormal(inout Record self, in Ray ray, in vec3 outward_normal) {

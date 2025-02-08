@@ -2,18 +2,21 @@
 
 #include <GL/glew.h>
 
-namespace pathtracer
+namespace path_tracer
 {
     class Buffer
     {
     public:
         Buffer(GLenum target, GLenum usage);
+
         ~Buffer();
 
         void Bind() const;
+
         void Unbind() const;
 
-        void Data(GLsizeiptr size, const void* pData) const;
+        void Data(GLsizeiptr size, const void *data) const;
+
         void BindBase(GLuint i) const;
 
     private:
