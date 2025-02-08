@@ -4,10 +4,7 @@
 #include <fstream>
 #include <imgui.h>
 #include <iostream>
-#include <vector>
-#include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
-#include <assimp/scene.h>
 #include <backends/imgui_impl_glfw.h>
 #include <backends/imgui_impl_opengl3.h>
 #include <GL/glew.h>
@@ -15,54 +12,12 @@
 #include <glm/glm.hpp>
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/matrix_transform.hpp>
+#include <pathtracer/buffer.hpp>
+#include <pathtracer/scene.hpp>
+#include <pathtracer/shader.hpp>
+#include <pathtracer/vertex_array.hpp>
+#include <pathtracer/window.hpp>
 #include <yaml-cpp/yaml.h>
-
-void glfwErrorCallback(const int errorCode, const char* pDescription)
-{
-    std::cerr << "[GLFW 0x" << std::hex << errorCode << std::dec << "] " << pDescription << std::endl;
-}
-
-struct WindowState
-{
-    int xpos;
-    int ypos;
-    int width;
-    int height;
-};
-
-void glfwToggleFullscreen(GLFWwindow* pWindow)
-{
-    auto pState = static_cast<WindowState*>(glfwGetWindowUserPointer(pWindow));
-    if (pState)
-    {
-        glfwSetWindowMonitor(pWindow, nullptr, pState->xpos, pState->ypos, pState->width, pState->height, GLFW_DONT_CARE);
-        glfwSetWindowAttrib(pWindow, GLFW_RESIZABLE, GLFW_TRUE);
-
-        glfwSetWindowUserPointer(pWindow, nullptr);
-        delete pState;
-    }
-    else
-    {
-        pState = new WindowState();
-        glfwGetWindowPos(pWindow, &pState->xpos, &pState->ypos);
-        glfwGetWindowSize(pWindow, &pState->width, &pState->height);
-        glfwSetWindowUserPointer(pWindow, pState);
-
-        const auto pMonitor = glfwGetPrimaryMonitor();
-        const auto pMode = glfwGetVideoMode(pMonitor);
-        glfwSetWindowMonitor(pWindow, nullptr, 0, 0, pMode->width, pMode->height, pMode->refreshRate);
-        glfwSetWindowAttrib(pWindow, GLFW_RESIZABLE, GLFW_FALSE);
-    }
-}
-
-void glfwKeyCallback(GLFWwindow* pWindow, const int key, const int /*scancode*/, const int action, const int /*mods*/)
-{
-    if (key == GLFW_KEY_ESCAPE && action == GLFW_RELEASE)
-        glfwSetWindowShouldClose(pWindow, GLFW_TRUE);
-
-    if (key == GLFW_KEY_F11 && action == GLFW_RELEASE)
-        glfwToggleFullscreen(pWindow);
-}
 
 void glErrorCallback(const GLenum /*source*/, const GLenum /*type*/, const GLuint id, const GLenum severity, const GLsizei /*length*/, const GLchar* pMessage, const void* /*pUserParam*/)
 {
@@ -71,160 +26,14 @@ void glErrorCallback(const GLenum /*source*/, const GLenum /*type*/, const GLuin
     std::cerr << "[GL 0x" << std::hex << id << std::dec << "] " << pMessage << std::endl;
 }
 
-std::string loadShader(const std::filesystem::path& path, const bool isRecursiveCall = false)
-{
-    const std::string include_keyword = "#include ";
-
-    std::string source;
-    std::ifstream stream(path);
-
-    if (!stream)
-    {
-        std::cerr << "Failed to open " << path << std::endl;
-        return source;
-    }
-
-    std::string line;
-    while (std::getline(stream, line))
-    {
-        if (line.find(include_keyword) != std::string::npos)
-        {
-            line.erase(0, include_keyword.size());
-
-            std::string filename = line.substr(1, line.length() - 2); // Get rid of "" or <>
-            source += loadShader(path.parent_path() / filename, true);
-
-            continue;
-        }
-
-        source += line + '\n';
-    }
-
-    if (!isRecursiveCall)
-        source += '\0';
-
-    stream.close();
-    return source;
-}
-
-void addShader(const GLuint program, const std::filesystem::path& path, const GLenum type)
-{
-    if (is_directory(path))
-    {
-        for (const auto& entry : std::filesystem::directory_iterator(path))
-            addShader(program, entry.path(), type);
-        return;
-    }
-
-    if (path.extension() != ".glsl")
-        return;
-
-    const auto source = loadShader(path);
-
-    const auto pSource = source.c_str();
-
-    const auto shader = glCreateShader(type);
-    glShaderSource(shader, 1, &pSource, nullptr);
-    glCompileShader(shader);
-    {
-        GLint status;
-        glGetShaderiv(shader, GL_COMPILE_STATUS, &status);
-        if (!status)
-        {
-            GLsizei length;
-            GLchar pMessage[1000];
-            glGetShaderInfoLog(shader, 1000, &length, pMessage);
-            std::cerr << "In " << path << ":" << std::endl << pMessage << std::endl;
-            return;
-        }
-    }
-
-    glAttachShader(program, shader);
-    glDeleteShader(shader);
-}
-
-struct StageInfo
-{
-    std::vector<std::string> Vertex;
-    std::vector<std::string> Fragment;
-};
-
-struct ShaderInfo
-{
-    std::string ID;
-    StageInfo Stages;
-};
-
-StageInfo parseStageInfo(YAML::Node yaml)
-{
-    return StageInfo
-    {
-        .Vertex = yaml["vertex"].as<std::vector<std::string>>(),
-        .Fragment = yaml["fragment"].as<std::vector<std::string>>(),
-    };
-}
-
-ShaderInfo parseShaderInfo(const std::filesystem::path& path)
-{
-    auto yaml = YAML::LoadFile(path.string());
-    return ShaderInfo
-    {
-        .ID = yaml["id"].as<std::string>(),
-        .Stages = parseStageInfo(yaml["stages"])
-    };
-}
-
-struct Triangle
-{
-    alignas(16) glm::vec3 P0;
-    alignas(16) glm::vec3 P1;
-    alignas(16) glm::vec3 P2;
-    alignas(8) glm::vec2 UV0;
-    alignas(8) glm::vec2 UV1;
-    alignas(8) glm::vec2 UV2;
-    alignas(4) uint32_t Material;
-};
-
-struct Material
-{
-    alignas(16) glm::vec3 Diffuse;
-    alignas(4) int DiffuseTexture;
-    alignas(16) glm::vec3 Emissive;
-    alignas(4) int EmissiveTexture;
-    alignas(4) float_t Roughness;
-    alignas(4) float_t Metalness;
-};
-
 int main(const int /*argc*/, const char** ppArgv)
 {
     const auto assets = std::filesystem::path(ppArgv[0]).parent_path() / "assets";
 
-    glfwSetErrorCallback(glfwErrorCallback);
-
-    if (!glfwInit())
-    {
-        std::cerr << "glfwInit" << std::endl;
-        return -1;
-    }
-
-    glfwDefaultWindowHints();
-    glfwWindowHint(GLFW_CONTEXT_DEBUG, GLFW_TRUE);
-    const auto pWindow = glfwCreateWindow(800, 600, "Pathtracer", nullptr, nullptr);
-    if (!pWindow)
-    {
-        std::cerr << "glfwCreateWindow" << std::endl;
-        return -1;
-    }
-
-    glfwMakeContextCurrent(pWindow);
-    glfwSetKeyCallback(pWindow, glfwKeyCallback);
-    glfwSwapInterval(1);
+    const pathtracer::Window window(600, 600);
 
     if (const auto error = glewInit())
     {
-        glfwDestroyWindow(pWindow);
-        glfwTerminate();
-
         std::cerr << "glewInit " << glewGetErrorString(error) << std::endl;
         return -1;
     }
@@ -245,108 +54,62 @@ int main(const int /*argc*/, const char** ppArgv)
     io.ConfigViewportsNoTaskBarIcon = true;
 
     ImGui_ImplOpenGL3_Init();
-    ImGui_ImplGlfw_InitForOpenGL(pWindow, true);
+    ImGui_ImplGlfw_InitForOpenGL(window.GLFW(), true);
 
     constexpr GLfloat pVertices[]{-1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 1.0f, 1.0f, -1.0f};
     constexpr GLuint pIndices[]{0, 1, 2, 2, 3, 0};
 
-    std::vector<Triangle> triangles;
-    std::vector<Material> materials;
-
-    Assimp::Importer importer;
-    if (const auto pScene = importer.ReadFile((assets / "objects" / "cornell_box.obj").string(), aiProcess_Triangulate | aiProcess_JoinIdenticalVertices | aiProcess_FlipWindingOrder))
-    {
-        std::cout << "Imported " << pScene->mName.C_Str() << std::endl;
-
-        // parse mesh data
-        // parse material data
-
-        importer.FreeScene();
-    }
-    else
-    {
-        std::cerr << "Failed to import scene" << std::endl;
-    }
-
-    GLuint vao, vbo, accum, triangle_ssbo, material_ssbo;
-
-    glGenVertexArrays(1, &vao);
-    glBindVertexArray(vao);
-    glGenBuffers(1, &vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    const pathtracer::VertexArray vertex_array;
+    vertex_array.Bind();
+    const pathtracer::Buffer vertex_buffer(GL_ARRAY_BUFFER, GL_STATIC_DRAW);
+    vertex_buffer.Bind();
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(GLfloat), nullptr);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(pVertices), pVertices, GL_STATIC_DRAW);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
+    vertex_buffer.Data(sizeof(pVertices), pVertices);
+    vertex_buffer.Unbind();
+    vertex_array.Unbind();
 
-    glGenBuffers(1, &triangle_ssbo);
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, triangle_ssbo);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, triangles.size() * sizeof(Triangle), triangles.data(), GL_STATIC_DRAW);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, triangle_ssbo);
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-
-    glGenBuffers(1, &material_ssbo);
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, material_ssbo);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, materials.size() * sizeof(Material), materials.data(), GL_STATIC_DRAW);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, material_ssbo);
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-
+    GLuint accum;
     glGenTextures(1, &accum);
 
-    const auto program = glCreateProgram();
+    pathtracer::Shader* pShader;
+    try { pShader = new pathtracer::Shader(assets / "main.yaml"); }
+    catch (const std::runtime_error& error)
     {
-        const auto [ID, Stages] = parseShaderInfo(assets / "main.yaml");
-        for (const auto& filename : Stages.Vertex)
-            addShader(program, assets / filename, GL_VERTEX_SHADER);
-        for (const auto& filename : Stages.Fragment)
-            addShader(program, assets / filename, GL_FRAGMENT_SHADER);
-    }
-    glLinkProgram(program);
-    {
-        GLint status;
-        glGetProgramiv(program, GL_LINK_STATUS, &status);
-        if (!status)
-        {
-            std::cerr << "Failed to link program" << std::endl;
-
-            GLsizei length;
-            GLchar pMessage[1000];
-            glGetProgramInfoLog(program, 1000, &length, pMessage);
-            std::cerr << pMessage << std::endl;
-
-            return -1;
-        }
-    }
-    glValidateProgram(program);
-    {
-        GLint status;
-        glGetProgramiv(program, GL_VALIDATE_STATUS, &status);
-        if (!status)
-        {
-            std::cerr << "Failed to validate program" << std::endl;
-
-            GLsizei length;
-            GLchar pMessage[1000];
-            glGetProgramInfoLog(program, 1000, &length, pMessage);
-            std::cerr << pMessage << std::endl;
-
-            return -1;
-        }
+        std::cerr << error.what() << std::endl;
+        return -1;
     }
 
-    glm::vec3 origin(0.0f, 0.0f, 4.0f);
+    pathtracer::Scene scene;
+    scene.LoadModel(assets / "objects" / "cornell_box.obj", aiProcess_GenNormals);
+
+    // scene.LoadModel(assets / "objects" / "axis.obj");
+    // scene.GetLastModel().Transform = scale(rotate(translate(glm::mat4(1.0f), glm::vec3(0.0f, -0.95f, 0.0f)), glm::radians(45.0f), normalize(glm::vec3(0.0f, 1.0f, 0.0f))), glm::vec3(0.1f));
+    // scene.GetLastModel().InverseTransform = inverse(scene.GetLastModel().Transform);
+    // scene.GetLastModel().NormalTransform = transpose(scene.GetLastModel().InverseTransform);
+
+    scene.LoadModel(assets / "objects" / "cow.obj", aiProcess_GenSmoothNormals);
+    scene.GetLastModel().Transform = scale(rotate(translate(glm::mat4(1.0f), glm::vec3(-0.5f, -0.65f, 0.0f)), glm::radians(-135.0f), normalize(glm::vec3(0.0f, 1.0f, 0.0f))), glm::vec3(0.1f));
+    scene.GetLastModel().InverseTransform = inverse(scene.GetLastModel().Transform);
+    scene.GetLastModel().NormalTransform = transpose(scene.GetLastModel().InverseTransform);
+
+    scene.LoadModel(assets / "objects" / "teapot.obj", aiProcess_GenSmoothNormals);
+    scene.GetLastModel().Transform = scale(rotate(translate(glm::mat4(1.0f), glm::vec3(0.5f, -1.0f, 0.0f)), glm::radians(-45.0f), normalize(glm::vec3(0.0f, 1.0f, 0.0f))), glm::vec3(0.2f));
+    scene.GetLastModel().InverseTransform = inverse(scene.GetLastModel().Transform);
+    scene.GetLastModel().NormalTransform = transpose(scene.GetLastModel().InverseTransform);
+
+    scene.Upload();
+
+    glm::vec3 origin(0.0f, 0.0f, 3.75f);
     glm::mat4 camera_to_world = inverse(lookAt(origin, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f)));
-    glm::mat4 screen_to_camera;
 
-    uint32_t sample_count = 1;
-
+    unsigned sample_count = 1;
     int prev_width = 0, prev_height = 0;
 
-    while (!glfwWindowShouldClose(pWindow))
+    do
     {
         int width, height;
-        glfwGetFramebufferSize(pWindow, &width, &height);
+        window.GetFramebufferSize(&width, &height);
 
         if (width == 0 || height == 0)
         {
@@ -354,7 +117,7 @@ int main(const int /*argc*/, const char** ppArgv)
             continue;
         }
 
-        glUseProgram(program);
+        pShader->Bind();
         if (width != prev_width || height != prev_height)
         {
             prev_width = width;
@@ -369,20 +132,21 @@ int main(const int /*argc*/, const char** ppArgv)
             glBindTexture(GL_TEXTURE_2D, 0);
             glBindImageTexture(0, accum, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
 
-            screen_to_camera = inverse(glm::perspectiveFov(glm::radians(40.0f), static_cast<float>(width), static_cast<float>(height), 0.001f, 1000.0f));
+            glm::mat4 screen_to_camera = inverse(glm::perspectiveFov(glm::radians(40.0f), static_cast<float>(width), static_cast<float>(height), 0.001f, 1000.0f));
 
-            glUniform3fv(glGetUniformLocation(program, "Origin"), 1, &origin[0]);
-            glUniformMatrix4fv(glGetUniformLocation(program, "CameraToWorld"), 1, GL_FALSE, &camera_to_world[0][0]);
-            glUniformMatrix4fv(glGetUniformLocation(program, "ScreenToCamera"), 1, GL_FALSE, &screen_to_camera[0][0]);
+            pShader->SetUniform("Origin", [&origin](const GLint loc) { glUniform3fv(loc, 1, &origin[0]); });
+            pShader->SetUniform("CameraToWorld", [&camera_to_world](const GLint loc) { glUniformMatrix4fv(loc, 1, GL_FALSE, &camera_to_world[0][0]); });
+            pShader->SetUniform("ScreenToCamera", [&screen_to_camera](const GLint loc) { glUniformMatrix4fv(loc, 1, GL_FALSE, &screen_to_camera[0][0]); });
         }
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        glBindVertexArray(vao);
-        glUniform1ui(glGetUniformLocation(program, "SampleCount"), sample_count++);
+        pShader->SetUniform("SampleCount", [&sample_count](const GLint loc) { glUniform1ui(loc, sample_count++); });
+
+        vertex_array.Bind();
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, pIndices);
-        glBindVertexArray(0);
-        glUseProgram(0);
+        vertex_array.Unbind();
+        pShader->Unbind();
 
         ImGui_ImplGlfw_NewFrame();
         ImGui_ImplOpenGL3_NewFrame();
@@ -390,8 +154,9 @@ int main(const int /*argc*/, const char** ppArgv)
 
         ImGui::DockSpaceOverViewport(0, nullptr, ImGuiDockNodeFlags_PassthruCentralNode);
 
-        if (ImGui::Begin("Scene"))
+        if (ImGui::Begin("Stats"))
         {
+            ImGui::Text("Frame: %d", sample_count);
         }
         ImGui::End();
 
@@ -401,19 +166,14 @@ int main(const int /*argc*/, const char** ppArgv)
         {
             ImGui::UpdatePlatformWindows();
             ImGui::RenderPlatformWindowsDefault();
-            glfwMakeContextCurrent(pWindow);
+            window.MakeContextCurrent();
         }
-
-        glfwSwapBuffers(pWindow);
-        glfwPollEvents();
     }
+    while (window.Frame());
 
     ImGui_ImplGlfw_Shutdown();
     ImGui_ImplOpenGL3_Shutdown();
     ImGui::DestroyContext();
-
-    glfwDestroyWindow(pWindow);
-    glfwTerminate();
 
     return 0;
 }

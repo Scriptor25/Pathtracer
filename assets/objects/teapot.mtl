@@ -1,0 +1,4 @@
+newmtl glass
+Kd 0.7 0.8 1.0
+Tr 1.0
+Ni 1.5

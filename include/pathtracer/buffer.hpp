@@ -1,0 +1,24 @@
+#pragma once
+
+#include <GL/glew.h>
+
+namespace pathtracer
+{
+    class Buffer
+    {
+    public:
+        Buffer(GLenum target, GLenum usage);
+        ~Buffer();
+
+        void Bind() const;
+        void Unbind() const;
+
+        void Data(GLsizeiptr size, const void* pData) const;
+        void BindBase(GLuint i) const;
+
+    private:
+        GLuint m_Handle = 0;
+        GLenum m_Target;
+        GLenum m_Usage;
+    };
+}

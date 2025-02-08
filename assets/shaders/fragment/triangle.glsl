@@ -1,7 +1,13 @@
 #version 450 core
 #include "common.incl"
 
-bool Triangle_Hit(in Triangle self, in Ray ray, in Interval ray_t, inout Record rec) {
+layout (binding = 0, std430) readonly buffer TriangleBuffer {
+    Triangle triangles[];
+};
+
+bool Triangle_Hit(in uint index, in Ray ray, in float ray_t_min, in float ray_t_max, inout Record rec) {
+
+    Triangle self = triangles[index];
 
     vec3 edge1 = self.p1 - self.p0;
     vec3 edge2 = self.p2 - self.p0;
@@ -29,7 +35,7 @@ bool Triangle_Hit(in Triangle self, in Ray ray, in Interval ray_t, inout Record 
 
     float t = inv_det * dot(edge2, cross_s_e1);
 
-    if (!Interval_Contains(ray_t, t)) {
+    if (!(ray_t_min <= t && t <= ray_t_max)) {
         return false;
     }
 
@@ -38,9 +44,9 @@ bool Triangle_Hit(in Triangle self, in Ray ray, in Interval ray_t, inout Record 
     rec.t = t;
     rec.p = Ray_At(ray, t);
     rec.uv = self.uv0 * w + self.uv1 * u + self.uv2 * v;
-    vec3 outward_normal = cross(normalize(edge1), normalize(edge2));
+    vec3 outward_normal = self.n0 * w + self.n1 * u + self.n2 * v;
     Record_SetNormal(rec, ray, outward_normal);
     rec.material = self.material;
 
-    return rec.front_face;
+    return true;
 }

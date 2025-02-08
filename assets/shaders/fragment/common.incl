@@ -9,11 +9,6 @@ struct Ray {
     vec3 direction;
 };
 
-struct Interval {
-    float min;
-    float max;
-};
-
 struct Record {
     float t;
     vec3 p;
@@ -33,15 +28,22 @@ struct Triangle {
     vec3 p0;
     vec3 p1;
     vec3 p2;
+    vec3 n0;
+    vec3 n1;
+    vec3 n2;
     vec2 uv0;
     vec2 uv1;
     vec2 uv2;
     uint material;
 };
 
-struct Texture {
-    vec2 uv0;
-    vec2 uv1;
+struct BVHNode {
+    vec3 min;
+    vec3 max;
+    uint left;
+    uint right;
+    uint start;
+    uint end;
 };
 
 struct Material {
@@ -51,6 +53,20 @@ struct Material {
     int emissive_texture;
     float roughness;
     float metalness;
+    float transparency;
+    float ir;
+};
+
+struct Model {
+    uint root;
+    mat4 transform;
+    mat4 inverse_transform;
+    mat3 normal_transform;
+};
+
+struct Texture {
+    vec2 uv0;
+    vec2 uv1;
 };
 
 void Seed(in uint _seed);
@@ -64,11 +80,11 @@ vec3 RandomUnitVec3();
 vec3 RandomInUnitSphere();
 
 vec3 Ray_At(in Ray self, in float t);
-bool Interval_Contains(in Interval self, in float x);
 void Record_SetNormal(inout Record self, in Ray ray, in vec3 outward_normal);
 
-bool Sphere_Hit(in Sphere self, in Ray ray, in Interval ray_t, inout Record rec);
-bool Triangle_Hit(in Triangle self, in Ray ray, in Interval ray_t, inout Record rec);
+bool Sphere_Hit(in Sphere self, in Ray ray, in float ray_t_min, in float ray_t_max, inout Record rec);
+bool Triangle_Hit(in uint index, in Ray ray, in float ray_t_min, in float ray_t_max, inout Record rec);
+bool BVHNode_Hit(in uint index, in Ray ray, in float ray_t_min, in float ray_t_max);
 
 vec3 SendRay(in Ray ray);
 bool Scatter(inout Ray ray, in Record rec, inout vec3 contribution, inout vec3 light);
