@@ -4,18 +4,18 @@
 #include <assimp/scene.h>
 #include <pathtracer/scene.hpp>
 
-glm::vec3 path_tracer::Triangle::Center() const
+glm::vec3 pathtracer::Triangle::Center() const
 {
     return (P0 + P1 + P2) / 3.0f;
 }
 
-void path_tracer::Triangle::AddBounds(glm::vec3 &min, glm::vec3 &max) const
+void pathtracer::Triangle::AddBounds(glm::vec3 &min, glm::vec3 &max) const
 {
     min = glm::min(glm::min(glm::min(min, P0), P1), P2);
     max = glm::max(glm::max(glm::max(max, P0), P1), P2);
 }
 
-path_tracer::Scene::Scene()
+pathtracer::Scene::Scene()
     : m_TriangleBuffer(GL_SHADER_STORAGE_BUFFER, GL_STATIC_DRAW),
       m_MaterialBuffer(GL_SHADER_STORAGE_BUFFER, GL_STATIC_DRAW),
       m_ModelBuffer(GL_SHADER_STORAGE_BUFFER, GL_STATIC_DRAW),
@@ -23,7 +23,7 @@ path_tracer::Scene::Scene()
 {
 }
 
-void path_tracer::Scene::LoadModel(const std::filesystem::path &path, const unsigned int flags)
+void pathtracer::Scene::LoadModel(const std::filesystem::path &path, const unsigned int flags)
 {
     Assimp::Importer importer;
     const auto scene = importer.ReadFile(
@@ -111,7 +111,7 @@ void path_tracer::Scene::LoadModel(const std::filesystem::path &path, const unsi
     m_Models.emplace_back(root, glm::mat4(1.0f), glm::mat4(1.0f));
 }
 
-size_t path_tracer::Scene::GenerateBVHTree(const unsigned start, const unsigned end, const unsigned depth)
+size_t pathtracer::Scene::GenerateBVHTree(const unsigned start, const unsigned end, const unsigned depth)
 {
     glm::vec3 min{std::numeric_limits<float>::infinity()}, max{-std::numeric_limits<float>::infinity()};
 
@@ -166,7 +166,7 @@ size_t path_tracer::Scene::GenerateBVHTree(const unsigned start, const unsigned 
     return idx;
 }
 
-void path_tracer::Scene::Upload() const
+void pathtracer::Scene::Upload() const
 {
     m_TriangleBuffer.Bind();
     m_TriangleBuffer.Data(m_Triangles.size() * sizeof(Triangle), m_Triangles.data());
@@ -190,12 +190,12 @@ void path_tracer::Scene::Upload() const
     m_BVHNodeBuffer.BindBase(3);
 }
 
-path_tracer::Model &path_tracer::Scene::GetModel(const size_t i)
+pathtracer::Model &pathtracer::Scene::GetModel(const size_t i)
 {
     return m_Models[i];
 }
 
-path_tracer::Model &path_tracer::Scene::GetLastModel()
+pathtracer::Model &pathtracer::Scene::GetLastModel()
 {
     return m_Models.back();
 }

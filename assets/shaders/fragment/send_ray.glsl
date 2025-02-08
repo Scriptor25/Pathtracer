@@ -65,13 +65,13 @@ vec3 SendRay(in Ray ray) {
     vec3 contribution = vec3(1.0);
 
     Record rec;
-    for (int depth = 0; depth < 20; ++depth) {
-        if (!models_hit(ray, Interval(0.1, 100.0), rec)) {
+    bool ok = true;
+    for (int depth = 0; depth < 20 && ok; ++depth) {
+        ok = models_hit(ray, Interval(0.1, 100.0), rec);
+        if (!ok) {
             light += contribution * Miss(ray);
-            break;
-        }
-        if (!Scatter(ray, rec, contribution, light)){
-            break;
+        } else {
+            ok = Scatter(ray, rec, contribution, light);
         }
     }
 

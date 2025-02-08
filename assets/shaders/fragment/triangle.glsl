@@ -15,7 +15,7 @@ bool Triangle_Hit(in uint index, in Ray ray, in Interval ray_t, inout Record rec
     vec3 cross_dir_e2 = cross(ray.direction, edge2);
     float det = dot(edge1, cross_dir_e2);
 
-    if (abs(det) < 1e-5) {
+    if (abs(det) < EPSILON) {
         return false;
     }
 

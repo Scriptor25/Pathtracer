@@ -104,7 +104,7 @@ static void attach_shader(const GLuint program, const std::filesystem::path &pat
     glDeleteShader(shader);
 }
 
-path_tracer::Shader::Shader(const std::filesystem::path &path)
+pathtracer::Shader::Shader(const std::filesystem::path &path)
 {
     m_Handle = glCreateProgram();
 
@@ -140,22 +140,22 @@ path_tracer::Shader::Shader(const std::filesystem::path &path)
     }
 }
 
-path_tracer::Shader::~Shader()
+pathtracer::Shader::~Shader()
 {
     glDeleteProgram(m_Handle);
 }
 
-void path_tracer::Shader::Bind() const
+void pathtracer::Shader::Bind() const
 {
     glUseProgram(m_Handle);
 }
 
-void path_tracer::Shader::Unbind() const
+void pathtracer::Shader::Unbind() const
 {
     glUseProgram(0);
 }
 
-void path_tracer::Shader::SetUniform(const std::string &name, const UniformConsumer &consumer) const
+void pathtracer::Shader::SetUniform(const std::string &name, const UniformConsumer &consumer) const
 {
     consumer(glGetUniformLocation(m_Handle, name.c_str()));
 }

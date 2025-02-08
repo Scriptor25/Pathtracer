@@ -2,7 +2,7 @@
 
 #include <GL/glew.h>
 
-namespace path_tracer
+namespace pathtracer
 {
     class Buffer
     {

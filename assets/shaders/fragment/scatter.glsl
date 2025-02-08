@@ -6,23 +6,40 @@ layout (binding = 1, std430) readonly buffer MaterialBuffer {
     Material materials[];
 };
 
-bool refract(in vec3 v, in vec3 n, in float ni_over_nt, out vec3 refracted) {
-    vec3 uv = normalize(v);
-    float dt = dot(uv, n);
-    float discriminant = 1.0 - ni_over_nt * ni_over_nt * (1.0 - dt * dt);
-
-    if (discriminant > 0) {
-        refracted = ni_over_nt * (uv - n * dt) - n * sqrt(discriminant);
-        return true;
-    }
-
-    return false;
-}
-
 float schlick(in float cosine, in float ref_idx) {
     float r0 = (1.0 - ref_idx) / (1.0 + ref_idx);
     r0 = r0 * r0;
     return r0 + (1.0 - r0) * pow((1.0 - cosine), 5.0);
+}
+
+vec3 get_direction(in Ray ray, in Record rec) {
+    vec3 reflected = reflect(ray.direction, rec.normal);
+
+    Material mat = materials[rec.material];
+    if (mat.transparency > 0.0) {
+        float eta = rec.front_face ? 1.0 / mat.ir : mat.ir;
+        vec3 refracted = refract(ray.direction, rec.normal, eta);
+
+        if (refracted == vec3(0.0)) {
+            return reflected;
+        }
+
+        float cosine = -dot(ray.direction, rec.normal) / length(ray.direction);
+        float probability = Random();
+        if (probability > schlick(cosine, mat.ir)) {
+            return refracted;
+        }
+
+        return reflected;
+    }
+
+    vec3 direction = reflected;
+    if (mat.metalness < 1.0) {
+        vec3 offset = rec.normal + RandomUnitVec3();
+        direction = mix(offset, direction, mat.metalness);
+    }
+
+    return normalize(direction + mat.roughness * RandomInUnitSphere());
 }
 
 bool Scatter(inout Ray ray, in Record rec, inout vec3 contribution, inout vec3 light) {
@@ -37,34 +54,7 @@ bool Scatter(inout Ray ray, in Record rec, inout vec3 contribution, inout vec3 l
 
     contribution *= mat.diffuse;
 
-    vec3 reflected = reflect(ray.direction, rec.normal);
-
-    vec3 direction;
-    if (mat.transparency > 0.0) {
-        float ni_over_nt = rec.front_face ? 1.0 / mat.ir : mat.ir;
-        float cosine = -dot(ray.direction, rec.normal) / length(ray.direction);
-
-        vec3 refracted;
-        if (refract(ray.direction, rec.normal, ni_over_nt, refracted)) {
-            float reflect_prob = schlick(cosine, mat.ir);
-            if (Random() < reflect_prob) {
-                direction = reflected;
-            } else {
-                direction = refracted;
-            }
-        } else {
-            direction = reflected;
-        }
-    } else {
-        if (mat.metalness < 1.0) {
-            vec3 diffuse = rec.normal + RandomUnitVec3();
-            direction = mix(diffuse, reflected, mat.metalness);
-        } else {
-            direction = reflected;
-        }
-
-        direction = normalize(direction + mat.roughness * RandomInUnitSphere());
-    }
+    vec3 direction = get_direction(ray, rec);
 
     ray.origin = rec.p;
     ray.direction = direction;

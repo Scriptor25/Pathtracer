@@ -2,62 +2,53 @@
 #include <stb_image.h>
 #include <pathtracer/window.hpp>
 
-void glfwErrorCallback(const int error_code, const char *description)
+static void glfw_error_callback(const int error_code, const char *description)
 {
     std::cerr << "[GLFW 0x" << std::hex << error_code << std::dec << "] " << description << std::endl;
 }
 
-void toggle_screen_mode(GLFWwindow *window)
+static void glfw_key_callback(
+    GLFWwindow *window,
+    const int key,
+    const int scancode,
+    const int action,
+    const int mods)
 {
-    auto state = static_cast<path_tracer::WindowState *>(glfwGetWindowUserPointer(window));
-    if (state)
-    {
-        glfwSetWindowMonitor(
-            window,
-            nullptr,
-            state->pos_x,
-            state->pos_y,
-            state->width,
-            state->height,
-            GLFW_DONT_CARE);
-        glfwSetWindowAttrib(window, GLFW_RESIZABLE, GLFW_TRUE);
+    static_cast<pathtracer::Window *>(glfwGetWindowUserPointer(window))->OnKey(key, scancode, action, mods);
+}
 
-        glfwSetWindowUserPointer(window, nullptr);
-        delete state;
-    }
-    else
-    {
-        state = new path_tracer::WindowState();
-        glfwGetWindowPos(window, &state->pos_x, &state->pos_y);
-        glfwGetWindowSize(window, &state->width, &state->height);
-        glfwSetWindowUserPointer(window, state);
+static void glfw_frame_buffer_size_callback(GLFWwindow *window, const int width, const int height)
+{
+    static_cast<pathtracer::Window *>(glfwGetWindowUserPointer(window))->OnFramebufferSize(width, height);
+}
 
-        const auto pMonitor = glfwGetPrimaryMonitor();
-        const auto pMode = glfwGetVideoMode(pMonitor);
-        glfwSetWindowMonitor(window, nullptr, 0, 0, pMode->width, pMode->height, pMode->refreshRate);
-        glfwSetWindowAttrib(window, GLFW_RESIZABLE, GLFW_FALSE);
+static unsigned window_count = 0;
+
+static void initialize()
+{
+    if (window_count++ == 0)
+    {
+        glfwSetErrorCallback(glfw_error_callback);
+        if (!glfwInit())
+            throw std::runtime_error("failed to initialize glfw");
     }
 }
 
-void glfwKeyCallback(GLFWwindow *pWindow, const int key, const int /*scancode*/, const int action, const int /*mods*/)
+static void terminate()
 {
-    if (key == GLFW_KEY_ESCAPE && action == GLFW_RELEASE)
-        glfwSetWindowShouldClose(pWindow, GLFW_TRUE);
-
-    if (key == GLFW_KEY_F11 && action == GLFW_RELEASE)
-        toggle_screen_mode(pWindow);
+    if (--window_count == 0)
+    {
+        glfwTerminate();
+    }
 }
 
-path_tracer::Window::Window(
+pathtracer::Window::Window(
     const int width,
     const int height,
     const std::string &title,
     const std::filesystem::path &icon)
 {
-    glfwSetErrorCallback(glfwErrorCallback);
-
-    if (!glfwInit())
-        throw std::runtime_error("failed to initialize glfw");
+    initialize();
 
     glfwDefaultWindowHints();
     glfwWindowHint(GLFW_CONTEXT_DEBUG, GLFW_TRUE);
@@ -67,7 +58,9 @@ path_tracer::Window::Window(
         throw std::runtime_error("failed to create window");
 
     glfwMakeContextCurrent(m_Handle);
-    glfwSetKeyCallback(m_Handle, glfwKeyCallback);
+    glfwSetWindowUserPointer(m_Handle, this);
+    glfwSetKeyCallback(m_Handle, glfw_key_callback);
+    glfwSetFramebufferSizeCallback(m_Handle, glfw_frame_buffer_size_callback);
     glfwSwapInterval(1);
 
     GLFWimage image;
@@ -76,18 +69,40 @@ path_tracer::Window::Window(
     stbi_image_free(image.pixels);
 }
 
-path_tracer::Window::~Window()
+pathtracer::Window::~Window()
 {
+    if (!m_Handle)
+        return;
+
     glfwDestroyWindow(m_Handle);
-    glfwTerminate();
+    terminate();
 }
 
-GLFWwindow *path_tracer::Window::Handle() const
+pathtracer::Window::Window(Window &&other) noexcept
+    : m_Handle(other.m_Handle),
+      m_State(other.m_State)
+{
+    other.m_Handle = nullptr;
+}
+
+pathtracer::Window &pathtracer::Window::operator=(Window &&other) noexcept
+{
+    std::swap(m_Handle, other.m_Handle);
+    std::swap(m_State, other.m_State);
+    return *this;
+}
+
+GLFWwindow *pathtracer::Window::Handle() const
 {
     return m_Handle;
 }
 
-bool path_tracer::Window::Frame() const
+void pathtracer::Window::SetFramebufferSizeCallback(const Callback &callback)
+{
+    m_FramebufferSizeCallback = callback;
+}
+
+bool pathtracer::Window::Spin() const
 {
     glfwSwapBuffers(m_Handle);
     glfwPollEvents();
@@ -95,12 +110,52 @@ bool path_tracer::Window::Frame() const
     return !glfwWindowShouldClose(m_Handle);
 }
 
-void path_tracer::Window::MakeContextCurrent() const
+void pathtracer::Window::MakeContextCurrent() const
 {
     glfwMakeContextCurrent(m_Handle);
 }
 
-void path_tracer::Window::GetFrameBufferSize(int &width, int &height) const
+void pathtracer::Window::GetFramebufferSize(int &width, int &height) const
 {
     glfwGetFramebufferSize(m_Handle, &width, &height);
+}
+
+void pathtracer::Window::OnKey(const int key, int scancode, const int action, int mods)
+{
+    if (key == GLFW_KEY_ESCAPE && action == GLFW_RELEASE)
+        glfwSetWindowShouldClose(m_Handle, GLFW_TRUE);
+
+    if (key == GLFW_KEY_F11 && action == GLFW_RELEASE)
+        ToggleScreenMode();
+}
+
+void pathtracer::Window::OnFramebufferSize(const int width, const int height) const
+{
+    if (m_FramebufferSizeCallback)
+        m_FramebufferSizeCallback();
+}
+
+void pathtracer::Window::ToggleScreenMode()
+{
+    if (m_State.Init)
+    {
+        m_State.Init = false;
+        glfwSetWindowMonitor(
+            m_Handle,
+            nullptr,
+            m_State.PositionX,
+            m_State.PositionY,
+            m_State.Width,
+            m_State.Height,
+            GLFW_DONT_CARE);
+        return;
+    }
+
+    m_State.Init = true;
+    glfwGetWindowPos(m_Handle, &m_State.PositionX, &m_State.PositionY);
+    glfwGetWindowSize(m_Handle, &m_State.Width, &m_State.Height);
+
+    const auto monitor = glfwGetPrimaryMonitor();
+    const auto video_mode = glfwGetVideoMode(monitor);
+    glfwSetWindowMonitor(m_Handle, monitor, 0, 0, video_mode->width, video_mode->height, video_mode->refreshRate);
 }

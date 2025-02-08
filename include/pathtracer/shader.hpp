@@ -4,7 +4,7 @@
 #include <functional>
 #include <GL/glew.h>
 
-namespace path_tracer
+namespace pathtracer
 {
     typedef std::function<void(GLint loc)> UniformConsumer;
 

@@ -5,7 +5,7 @@
 #include <glm/glm.hpp>
 #include <pathtracer/buffer.hpp>
 
-namespace path_tracer
+namespace pathtracer
 {
     struct Triangle
     {
